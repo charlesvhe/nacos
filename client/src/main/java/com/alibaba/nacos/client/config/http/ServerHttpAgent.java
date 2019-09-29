@@ -52,6 +52,8 @@ import java.util.concurrent.Callable;
 public class ServerHttpAgent implements HttpAgent {
 
     private static final Logger LOGGER = LogUtils.logger(ServerHttpAgent.class);
+    public static final String HEADER_SPAS_SECURITY_TOKEN = "Spas-SecurityToken";
+    public static final String HEADER_SPAS_ACCESS_KEY = "Spas-AccessKey";
 
     /**
      * @param path          相对于web应用根，以/开头
@@ -297,12 +299,12 @@ public class ServerHttpAgent implements HttpAgent {
             STSCredential sTSCredential = getSTSCredential();
             accessKey = sTSCredential.accessKeyId;
             secretKey = sTSCredential.accessKeySecret;
-            newHeaders.add("Spas-SecurityToken");
+            newHeaders.add(HEADER_SPAS_SECURITY_TOKEN);
             newHeaders.add(sTSCredential.securityToken);
         }
 
         if (StringUtils.isNotEmpty(accessKey) && StringUtils.isNotEmpty(secretKey)) {
-            newHeaders.add("Spas-AccessKey");
+            newHeaders.add(HEADER_SPAS_ACCESS_KEY);
             newHeaders.add(accessKey);
             List<String> signHeaders = SpasAdapter.getSignHeaders(paramValues, secretKey);
             if (signHeaders != null) {

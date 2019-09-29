@@ -15,6 +15,7 @@
  */
 package com.alibaba.nacos.console.filter;
 
+import com.alibaba.nacos.client.config.http.ServerHttpAgent;
 import com.alibaba.nacos.client.config.impl.SpasAdapter;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -37,52 +38,29 @@ import java.util.Collections;
  *
  * @author CharlesHe
  */
-public class SimpleSpasAuthenticationFilter extends OncePerRequestFilter {
+public class ConfigSpasAuthenticationFilter extends OncePerRequestFilter {
     private UserDetailsService userDetailsService;
 
-    public SimpleSpasAuthenticationFilter(UserDetailsService userDetailsService) {
+    public ConfigSpasAuthenticationFilter(UserDetailsService userDetailsService) {
         this.userDetailsService = userDetailsService;
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws IOException, ServletException {
-
-        String[] securityTokens = StringUtils.split(request.getHeader("Spas-SecurityToken"), ":");
-        if (securityTokens != null && securityTokens.length == 2) {
-            UserDetails user = userDetailsService.loadUserByUsername(securityTokens[0]);
-            if (user.getPassword().equals(securityTokens[1])) {
-                fillSecurityContext(user);
-                chain.doFilter(request, response);
-                return;
-            }
-        }
-
-        String accessKey = request.getHeader("Spas-AccessKey");
-        String signature = request.getHeader("Spas-Signature");
+        String accessKey = request.getHeader(ServerHttpAgent.HEADER_SPAS_ACCESS_KEY);
+        String signature = request.getHeader(SpasAdapter.HEADER_SPAS_SIGNATURE);
         if (StringUtils.hasText(accessKey) && StringUtils.hasText(signature)) {
             UserDetails user = userDetailsService.loadUserByUsername(accessKey);
-            String timestamp = request.getHeader("Timestamp");
+            String timestamp = request.getHeader(SpasAdapter.HEADER_TIMESTAMP);
+            String resource = SpasAdapter.getResource(request.getParameter(SpasAdapter.TENANT_KEY),
+                request.getParameter(SpasAdapter.GROUP_KEY));
 
-            String resource = null;
-            String tenant = request.getParameter("tenant");
-            String group = request.getParameter("group");
-            if (StringUtils.hasText(tenant) && StringUtils.hasText(group)) {
-                resource = tenant + "+" + group;
-            } else if (StringUtils.hasText(group)) {
-                resource = group;
-            }
-
-            boolean isSignatureMath = false;
-            if (StringUtils.hasText(resource)) {
-                isSignatureMath = signature.equals(SpasAdapter.signWithhmacSHA1Encrypt(timestamp, user.getPassword()));
-            } else {
-                isSignatureMath = signature.equals(SpasAdapter.signWithhmacSHA1Encrypt(resource + "+" + timestamp, user.getPassword()));
-            }
-
-            if (isSignatureMath) {
+            if (signature.equals(SpasAdapter.sign(resource, timestamp, user.getPassword()))) {
                 fillSecurityContext(user);
                 chain.doFilter(request, response);
                 return;
+            }else{
+                System.out.println("ConfigSpasAuthenticationFilter: 认证是失败");
             }
         }
 

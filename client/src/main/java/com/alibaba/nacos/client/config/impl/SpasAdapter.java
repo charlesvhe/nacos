@@ -31,47 +31,58 @@ import java.util.*;
  * @author Nacos
  */
 public class SpasAdapter {
+    public static final String HEADER_TIMESTAMP = "Timestamp";
+    public static final String HEADER_SPAS_SIGNATURE = "Spas-Signature";
+    public static final String GROUP_KEY = "group";
+    public static final String TENANT_KEY = "tenant";
 
     public static List<String> getSignHeaders(String resource, String secretKey) {
         List<String> header = new ArrayList<String>();
         String timeStamp = String.valueOf(System.currentTimeMillis());
-        header.add("Timestamp");
+        header.add(HEADER_TIMESTAMP);
         header.add(timeStamp);
         if (secretKey != null) {
-            header.add("Spas-Signature");
-            String signature = "";
-            if (StringUtils.isBlank(resource)) {
-                signature = signWithhmacSHA1Encrypt(timeStamp, secretKey);
-            } else {
-                signature = signWithhmacSHA1Encrypt(resource + "+" + timeStamp, secretKey);
-            }
+            header.add(HEADER_SPAS_SIGNATURE);
+            String signature = sign(resource, timeStamp, secretKey);
             header.add(signature);
         }
         return header;
+    }
+
+    public static String sign(String resource, String timeStamp, String secretKey) {
+        if (StringUtils.isBlank(resource)) {
+            return signWithhmacSHA1Encrypt(timeStamp, secretKey);
+        } else {
+            return signWithhmacSHA1Encrypt(resource + "+" + timeStamp, secretKey);
+        }
     }
 
     public static List<String> getSignHeaders(List<String> paramValues, String secretKey) {
         if (null == paramValues) {
             return null;
         }
-        Map<String, String> signMap = new HashMap<String, String>(5);
+        String tenant = null;
+        String group = null;
         for (Iterator<String> iter = paramValues.iterator(); iter.hasNext(); ) {
             String key = iter.next();
-            if (TENANT_KEY.equals(key) || GROUP_KEY.equals(key)) {
-                signMap.put(key, iter.next());
-            } else {
-                iter.next();
+            String value = iter.next();
+            if(TENANT_KEY.equals(key)){
+                tenant = value;
+            }else if(GROUP_KEY.equals(key)){
+                group = value;
             }
         }
+        return getSignHeaders(getResource(tenant, group), secretKey);
+    }
+
+    public static String getResource(String tenant, String group) {
         String resource = "";
-        if (signMap.size() > 1) {
-            resource = signMap.get(TENANT_KEY) + "+" + signMap.get(GROUP_KEY);
-        } else {
-            if (!StringUtils.isBlank(signMap.get(GROUP_KEY))) {
-                resource = signMap.get(GROUP_KEY);
-            }
+        if (StringUtils.isNotEmpty(tenant) && StringUtils.isNotEmpty(group)) {
+            resource = tenant + "+" + group;
+        } else if (StringUtils.isNotEmpty(group)) {
+            resource = group;
         }
-        return getSignHeaders(resource, secretKey);
+        return resource;
     }
 
     public static String getSk() {
@@ -99,7 +110,4 @@ public class SpasAdapter {
             throw new RuntimeException("signWithhmacSHA1Encrypt fail", e);
         }
     }
-
-    public static final String GROUP_KEY = "group";
-    public static final String TENANT_KEY = "tenant";
 }
